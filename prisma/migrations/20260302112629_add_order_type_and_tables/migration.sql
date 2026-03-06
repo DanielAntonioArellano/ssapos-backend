@@ -1,0 +1,10 @@
+-- CreateEnum
+CREATE TYPE "OrderStatus" AS ENUM ('ORDERED', 'PREPARATION', 'DELIVERY', 'COMPLETED', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "OrderType" AS ENUM ('DELIVERY', 'TAKEAWAY', 'DINE_IN');
+
+-- AlterTable
+ALTER TABLE "Order" ADD COLUMN     "tableNumber" INTEGER,
+ADD COLUMN     "type" "OrderType" NOT NULL DEFAULT 'DELIVERY',
+ALTER COLUMN "status" SET DEFAULT 'ORDERED';

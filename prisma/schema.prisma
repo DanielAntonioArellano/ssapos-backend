@@ -1,0 +1,307 @@
+// -------------------------------------------------------
+//  Prisma Schema Multi-Restaurant POS SaaS
+// -------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------
+// ENUMS
+// ---------------------------
+
+enum Role {
+  ADMIN
+  CAJERO
+  MESERO
+}
+enum OrderStatus {
+  ORDERED
+  PREPARATION
+  DELIVERY
+  COMPLETED
+  CANCELLED
+}
+enum OrderType {
+  DELIVERY
+  TAKEAWAY
+  DINE_IN
+}
+
+// ---------------------------
+// RESTAURANTE (NUEVO)
+// ---------------------------
+
+// ---------------------------
+// RESTAURANTE (NUEVO)
+// ---------------------------
+
+model Restaurant {
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String   @unique
+  address   String?
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  folioVenta Int @default(1)
+  folioOrden Int @default(1)
+  folioCorte Int @default(1)
+
+  users       User[]
+  products    Product[]
+  inventory   InventoryItem[]
+  sales       Sale[]
+  cajas       Caja[]
+  movimientos Movimiento[]
+  categories  Category[]
+  orders      Order[]
+  inventoryMovements InventoryMovement[]
+  printers           Printer[] 
+}
+
+// ---------------------------
+// USUARIOS
+// ---------------------------
+
+model User {
+  id           Int     @id @default(autoincrement())
+  name         String
+  email        String  @unique
+  password     String
+  role         Role?
+  isSuperAdmin Boolean @default(false)
+
+  restaurantId Int?
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  sales       Sale[]
+  cajas       Caja[]
+  movimientos Movimiento[]
+  orders      Order[]
+}
+
+// ---------------------------
+// INVENTARIO
+// ---------------------------
+
+model InventoryItem {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int
+  name         String
+  stock        Float
+  unit         String
+  createdAt    DateTime @default(now())
+
+  restaurant Restaurant              @relation(fields: [restaurantId], references: [id])
+  usage      ProductInventoryUsage[]
+    movimientos  InventoryMovement[]  
+}
+model InventoryMovement {
+  id              Int           @id @default(autoincrement())
+  inventoryItemId Int
+  restaurantId    Int
+  tipo            String        // ENTRADA | SALIDA
+  cantidad        Float
+  motivo          String
+  stockAnterior   Float
+  stockNuevo      Float
+  createdAt       DateTime      @default(now())
+
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  restaurant      Restaurant    @relation(fields: [restaurantId], references: [id])
+}
+
+model ProductInventoryUsage {
+  id              Int   @id @default(autoincrement())
+  productId       Int
+  inventoryItemId Int
+  quantity        Float
+  applyOnDineIn   Boolean @default(true)
+
+  product       Product       @relation(fields: [productId], references: [id])
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+}
+
+// ---------------------------
+// PRODUCTOS
+// ---------------------------
+
+model Product {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int
+  name         String
+  barcode      String?
+  priceBuy     Float
+  priceSell    Float
+  stock        Int
+  imageUrl     String?
+  createdAt    DateTime @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  saleItems      SaleItem[]
+  inventoryUsage ProductInventoryUsage[]
+  orderItems     OrderItem[]
+}
+
+model Category {
+  id           Int        @id @default(autoincrement())
+  name         String
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------
+// VENTAS
+// ---------------------------
+
+model Sale {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int
+  userId       Int
+  cajaId       Int?
+  total        Float
+  payment      String
+  createdAt    DateTime @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
+  caja       Caja?      @relation(fields: [cajaId], references: [id])
+  items      SaleItem[]
+}
+
+model SaleItem {
+  id        Int   @id @default(autoincrement())
+  saleId    Int
+  productId Int
+  customName String?
+  quantity  Int
+  priceUnit Float
+  subtotal  Float
+
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+}
+
+// ---------------------------
+// CAJA
+// ---------------------------
+
+model Caja {
+  id            Int       @id @default(autoincrement())
+  restaurantId  Int
+  userId        Int
+  montoInicial  Float
+  fechaApertura DateTime  @default(now())
+  fechaCierre   DateTime?
+  totalEfectivo Float?
+  totalTarjeta  Float?
+  totalGeneral  Float?
+
+  restaurant  Restaurant   @relation(fields: [restaurantId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  ventas      Sale[]
+  gastos      Gasto[]
+  movimientos Movimiento[]
+}
+
+model Gasto {
+  id       Int      @id @default(autoincrement())
+  cajaId   Int
+  concepto String
+  monto    Float
+  fecha    DateTime @default(now())
+
+  caja Caja @relation(fields: [cajaId], references: [id])
+}
+
+model Movimiento {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int
+  cajaId       Int
+  userId       Int
+  tipo         String
+  monto        Float
+  descripcion  String?
+  fecha        DateTime @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  caja       Caja       @relation(fields: [cajaId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
+}
+
+// ---------------------------
+// ORDENES
+// ---------------------------
+
+model Order {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int
+  userId       Int?
+  clientName   String?
+  clientPhone  String?
+  clientNotes  String?
+  status       OrderStatus @default(ORDERED)
+  total        Float    @default(0)
+
+  type         OrderType @default(DELIVERY) 
+  tableNumber  Int?     
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
+  user       User?       @relation(fields: [userId], references: [id])
+  items      OrderItem[]
+}
+
+model OrderItem {
+  id        Int   @id @default(autoincrement())
+  orderId   Int
+  productId Int?
+  customName String?
+  quantity  Int
+  priceUnit Float
+  subtotal  Float
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+}
+
+// ---------------------------
+// PRINTERS
+// ---------------------------
+model Printer {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int
+  name         String   // "Impresora Cocina"
+  ip           String   // "192.168.1.101"
+  port         Int      @default(9100)
+  role         PrinterRole
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
+enum PrinterRole {
+  CAJA
+  COCINA
+  BARRA
+}

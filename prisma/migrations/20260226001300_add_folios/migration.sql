@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Restaurant" ADD COLUMN     "folioCorte" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "folioOrden" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "folioVenta" INTEGER NOT NULL DEFAULT 1;

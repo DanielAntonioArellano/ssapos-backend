@@ -1,3 +1,4 @@
+// src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -13,6 +14,7 @@ import { RestaurantsModule } from './modules/restaurants/restaurants.module';
 import { CategoriesModule } from './categories/categories.module';
 import { PrintersModule } from './modules/printers/printers.module';
 import { PrinterModule } from './printer/printer.module';
+import { PrintModule } from './print/print.module';
 
 @Module({
   imports: [
@@ -30,6 +32,7 @@ import { PrinterModule } from './printer/printer.module';
     CategoriesModule,
     PrintersModule,
     PrinterModule,
+    PrintModule,
   ],
 })
 export class AppModule {}

@@ -1,3 +1,4 @@
+// src/modules/tickets/tickets.controller.ts
 import {
   Controller,
   Get,
@@ -6,8 +7,10 @@ import {
   ParseIntPipe,
   Req,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { TicketsService } from './tickets.service';
+import { PrintGateway } from '../../print/print.gateway';
 import { PrinterService } from '../../printer/printer.service';
 import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 
@@ -17,7 +20,10 @@ export class TicketsController {
   constructor(
     private readonly ticketsService: TicketsService,
     private readonly printerService: PrinterService,
+    private readonly printGateway: PrintGateway,
   ) {}
+
+  // ── GET tickets ────────────────────────────────────
 
   @Get('sale/:id')
   getSaleTicket(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
@@ -39,31 +45,60 @@ export class TicketsController {
     return this.ticketsService.getCorteTicket(req.user.restaurantId, id);
   }
 
+  // ── POST print ─────────────────────────────────────
+
   @Post('print/sale/:id')
   async printSale(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
-    const ticket = await this.ticketsService.getSaleTicket(req.user.restaurantId, id);
-    await this.printerService.printByRole(req.user.restaurantId, 'CAJA', ticket.lines);
+    const restaurantId = req.user.restaurantId;
+    const ticket = await this.ticketsService.getSaleTicket(restaurantId, id);
+    await this.emitOrFallback(restaurantId, 'CAJA', ticket.lines);
     return { ok: true, message: 'Ticket de venta enviado a impresora' };
   }
 
   @Post('print/order/:id')
   async printOrder(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
-    const ticket = await this.ticketsService.getOrderTicket(req.user.restaurantId, id);
-    await this.printerService.printByRole(req.user.restaurantId, 'COCINA', ticket.lines);
+    const restaurantId = req.user.restaurantId;
+    const ticket = await this.ticketsService.getOrderTicket(restaurantId, id);
+    await this.emitOrFallback(restaurantId, 'COCINA', ticket.lines);
     return { ok: true, message: 'Ticket de orden enviado a impresora' };
   }
 
   @Post('print/corte/actual')
   async printCorteActual(@Req() req: any) {
-    const ticket = await this.ticketsService.getCorteActualTicket(req.user.restaurantId);
-    await this.printerService.printByRole(req.user.restaurantId, 'CAJA', ticket.lines);
+    const restaurantId = req.user.restaurantId;
+    const ticket = await this.ticketsService.getCorteActualTicket(restaurantId);
+    await this.emitOrFallback(restaurantId, 'CAJA', ticket.lines);
     return { ok: true, message: 'Corte actual enviado a impresora' };
   }
 
   @Post('print/corte/:id')
   async printCorteById(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
-    const ticket = await this.ticketsService.getCorteTicket(req.user.restaurantId, id);
-    await this.printerService.printByRole(req.user.restaurantId, 'CAJA', ticket.lines);
+    const restaurantId = req.user.restaurantId;
+    const ticket = await this.ticketsService.getCorteTicket(restaurantId, id);
+    await this.emitOrFallback(restaurantId, 'CAJA', ticket.lines);
     return { ok: true, message: 'Corte enviado a impresora' };
+  }
+
+  // ── Helper ─────────────────────────────────────────
+
+  private async emitOrFallback(
+    restaurantId: number,
+    role: 'CAJA' | 'COCINA' | 'BARRA',
+    lines: string[],
+  ) {
+    if (this.printGateway.isAgentConnected(restaurantId)) {
+      const printer = await this.printerService.getPrinterByRole(restaurantId, role);
+      if (!printer) throw new BadRequestException(`No hay impresora configurada para rol ${role}`);
+
+      this.printGateway.emitPrintJob(restaurantId, {
+        printerIp: printer.ip,
+        printerPort: printer.port,
+        lines,
+      });
+      return;
+    }
+
+    // Fallback TCP directo
+    await this.printerService.printByRole(restaurantId, role, lines);
   }
 }

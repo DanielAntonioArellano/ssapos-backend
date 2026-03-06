@@ -9,12 +9,19 @@ export class PrinterService {
 
   constructor(private prisma: PrismaService) {}
 
-  // ── Comandos ESC/POS ──────────────────────────────────
   private readonly INIT         = Buffer.from([0x1b, 0x40]);
   private readonly CUT          = Buffer.from([0x1d, 0x56, 0x41, 0x03]);
   private readonly ALIGN_LEFT   = Buffer.from([0x1b, 0x61, 0x00]);
 
-  // ── Imprimir por rol (busca IP en BD) ─────────────────
+  async getPrinterByRole(
+    restaurantId: number,
+    role: 'CAJA' | 'COCINA' | 'BARRA',
+  ) {
+    return this.prisma.printer.findFirst({
+      where: { restaurantId, role, active: true },
+    });
+  }
+
   async printByRole(
     restaurantId: number,
     role: 'CAJA' | 'COCINA' | 'BARRA',
@@ -34,7 +41,6 @@ export class PrinterService {
     await this.sendToPrinter(data, printer.ip, printer.port);
   }
 
-  // ── Imprimir por ID directo (para test de conexión) ───
   async printById(
     restaurantId: number,
     printerId: number,
@@ -52,7 +58,6 @@ export class PrinterService {
     await this.sendToPrinter(data, printer.ip, printer.port);
   }
 
-  // ── printLines legacy (fallback a .env si no hay BD) ──
   async printLines(lines: string[]): Promise<void> {
     const host = process.env.PRINTER_IP ?? '192.168.1.100';
     const port = parseInt(process.env.PRINTER_PORT ?? '9100', 10);
@@ -60,7 +65,6 @@ export class PrinterService {
     await this.sendToPrinter(data, host, port);
   }
 
-  // ── Construir buffer ESC/POS ──────────────────────────
   private buildBuffer(lines: string[]): Buffer {
     const chunks: Buffer[] = [this.INIT, this.ALIGN_LEFT];
 
@@ -76,17 +80,11 @@ export class PrinterService {
     return Buffer.concat(chunks);
   }
 
-  // ── Envío TCP ─────────────────────────────────────────
-  private sendToPrinter(
-    data: Buffer,
-    host: string,
-    port: number,
-  ): Promise<void> {
+  private sendToPrinter(data: Buffer, host: string, port: number): Promise<void> {
     const timeout = 5000;
 
     return new Promise((resolve, reject) => {
       const client = new net.Socket();
-
       client.setTimeout(timeout);
 
       client.connect(port, host, () => {

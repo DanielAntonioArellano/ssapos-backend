@@ -225,15 +225,45 @@ export class OrdersService {
       throw new ForbiddenException('Solo el usuario CAJERO puede realizar ventas');
     }
 
+    // Cargar orden con inventario incluido
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, restaurantId },
-      include: { items: true },
+      include: {
+        items: {
+          include: {
+            product: {
+              include: {
+                inventoryUsage: {
+                  include: { inventoryItem: true },
+                },
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!order) throw new NotFoundException('Orden no encontrada');
 
     if (order.status === 'COMPLETED' || order.status === 'CANCELLED') {
       throw new BadRequestException('La orden ya fue finalizada o cancelada');
+    }
+
+    // Validar stock antes de la transacción
+    for (const item of order.items) {
+      if (!item.product) continue;
+
+      for (const usage of item.product.inventoryUsage) {
+        const necesidad = usage.quantity * item.quantity;
+
+        if (usage.inventoryItem.stock < necesidad) {
+          throw new BadRequestException(
+            `No hay suficiente inventario de ${usage.inventoryItem.name}. ` +
+            `Disponible: ${usage.inventoryItem.stock} ${usage.inventoryItem.unit}, ` +
+            `necesario: ${necesidad} ${usage.inventoryItem.unit}`,
+          );
+        }
+      }
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -245,6 +275,7 @@ export class OrdersService {
         throw new BadRequestException('No hay caja abierta.');
       }
 
+      // Crear venta
       const sale = await tx.sale.create({
         data: {
           restaurantId,
@@ -264,10 +295,27 @@ export class OrdersService {
         },
       });
 
+      // Marcar orden como completada
       await tx.order.update({
         where: { id: orderId },
         data: { status: 'COMPLETED' },
       });
+
+      // Descontar inventario
+      for (const item of order.items) {
+        if (!item.product) continue;
+
+        for (const usage of item.product.inventoryUsage) {
+          const descontar = usage.quantity * item.quantity;
+
+          await tx.inventoryItem.update({
+            where: { id: usage.inventoryItemId },
+            data: {
+              stock: { decrement: descontar },
+            },
+          });
+        }
+      }
 
       return sale;
     });

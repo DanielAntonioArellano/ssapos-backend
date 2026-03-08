@@ -12,6 +12,8 @@ export class PrinterService {
   private readonly INIT         = Buffer.from([0x1b, 0x40]);
   private readonly CUT          = Buffer.from([0x1d, 0x56, 0x41, 0x03]);
   private readonly ALIGN_LEFT   = Buffer.from([0x1b, 0x61, 0x00]);
+  // Comando estándar ESC/POS para abrir cajón (pin 2)
+  private readonly OPEN_DRAWER  = Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa]);
 
   async getPrinterByRole(
     restaurantId: number,
@@ -37,7 +39,7 @@ export class PrinterService {
       );
     }
 
-    const data = this.buildBuffer(lines);
+    const data = this.buildBuffer(lines, role === 'CAJA');
     await this.sendToPrinter(data, printer.ip, printer.port);
   }
 
@@ -65,7 +67,7 @@ export class PrinterService {
     await this.sendToPrinter(data, host, port);
   }
 
-  private buildBuffer(lines: string[]): Buffer {
+  private buildBuffer(lines: string[], openDrawer = false): Buffer {
     const chunks: Buffer[] = [this.INIT, this.ALIGN_LEFT];
 
     for (const line of lines) {
@@ -75,6 +77,11 @@ export class PrinterService {
         continue;
       }
       chunks.push(Buffer.from(line + '\n', 'utf8'));
+    }
+
+    // Abrir cajón después del corte, solo en impresora CAJA
+    if (openDrawer) {
+      chunks.push(this.OPEN_DRAWER);
     }
 
     return Buffer.concat(chunks);

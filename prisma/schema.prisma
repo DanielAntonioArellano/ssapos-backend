@@ -189,7 +189,7 @@ model Sale {
 model SaleItem {
   id        Int   @id @default(autoincrement())
   saleId    Int
-  productId Int
+  productId Int?
   customName String?
   quantity  Int
   priceUnit Float

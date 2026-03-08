@@ -5,10 +5,6 @@ import { PrismaService } from '../../../prisma/prisma.service';
 export class TicketsService {
   constructor(private prisma: PrismaService) {}
 
-  // ==================================================
-  // CONFIGURACIÓN 80MM — 48 caracteres por línea
-  // ==================================================
-
   private readonly LINE_WIDTH = 48;
 
   private separator() {
@@ -75,11 +71,17 @@ export class TicketsService {
         data: { folioVenta: { increment: 1 } },
       });
 
-      const itemLines: string[] = [];
+      // Calcular subtotal real (suma de precios sin descuento)
+      const subtotalReal = sale.items.reduce(
+        (s, item) => s + item.priceUnit * item.quantity,
+        0,
+      );
+      const descuento = subtotalReal - sale.total;
+      const hayDescuento = descuento > 0.01;
 
+      const itemLines: string[] = [];
       for (const item of sale.items) {
         const name = item.product?.name ?? item.customName ?? 'Producto';
-        // Línea: "  2x Nombre del producto          $99.99"
         itemLines.push(
           this.alignLeftRight(
             `  ${item.quantity}x ${name}`,
@@ -104,7 +106,10 @@ export class TicketsService {
           this.separatorThin(),
           ...itemLines,
           this.separatorThin(),
-          this.alignLeftRight('Subtotal', `$${sale.total.toFixed(2)}`),
+          this.alignLeftRight('Subtotal', `$${subtotalReal.toFixed(2)}`),
+          ...(hayDescuento
+            ? [this.alignLeftRight('Descuento', `-$${descuento.toFixed(2)}`)]
+            : []),
           this.alignLeftRight('Metodo de pago', sale.payment ?? ''),
           this.separator(),
           this.alignLeftRight('TOTAL', `$${sale.total.toFixed(2)}`),
@@ -141,7 +146,6 @@ export class TicketsService {
       });
 
       const itemLines: string[] = [];
-
       for (const item of order.items) {
         const name = item.product?.name ?? item.customName ?? 'Producto';
         itemLines.push(
@@ -179,7 +183,7 @@ export class TicketsService {
           this.alignLeftRight('TOTAL', `$${order.total.toFixed(2)}`),
           this.separator(),
           '\n\n\n',
-        ].filter(l => l !== ''), // elimina líneas vacías de notas opcionales
+        ].filter(l => l !== ''),
       };
     });
   }
@@ -259,18 +263,55 @@ export class TicketsService {
 
     const totalVentas = ventasEfectivo + ventasTarjeta;
 
-    const entradas = caja.movimientos
-      .filter((m) => m.tipo === 'ENTRADA')
-      .reduce((s, m) => s + m.monto, 0);
+    const entradas = caja.movimientos.filter((m) => m.tipo === 'ENTRADA');
+    const salidas  = caja.movimientos.filter((m) => m.tipo === 'SALIDA');
+    const gastos   = caja.gastos;
 
-    const salidas = caja.movimientos
-      .filter((m) => m.tipo === 'SALIDA')
-      .reduce((s, m) => s + m.monto, 0);
-
-    const gastos = caja.gastos.reduce((s, g) => s + g.monto, 0);
+    const totalEntradas = entradas.reduce((s, m) => s + m.monto, 0);
+    const totalSalidas  = salidas.reduce((s, m) => s + m.monto, 0);
+    const totalGastos   = gastos.reduce((s, g) => s + g.monto, 0);
 
     const totalFinal =
-      caja.montoInicial + ventasEfectivo + entradas - salidas - gastos;
+      caja.montoInicial + ventasEfectivo + totalEntradas - totalSalidas - totalGastos;
+
+    // Líneas detalladas de entradas
+    const entradasLines: string[] = entradas.length > 0
+      ? [
+          this.separatorThin(),
+          this.center('ENTRADAS'),
+          this.separatorThin(),
+          ...entradas.map((m) =>
+            this.alignLeftRight(`  ${m.motivo ?? 'Sin concepto'}`, `$${m.monto.toFixed(2)}`),
+          ),
+          this.alignLeftRight('  Total entradas', `$${totalEntradas.toFixed(2)}`),
+        ]
+      : [this.alignLeftRight('Entradas', `$${totalEntradas.toFixed(2)}`)];
+
+    // Líneas detalladas de salidas
+    const salidasLines: string[] = salidas.length > 0
+      ? [
+          this.separatorThin(),
+          this.center('SALIDAS'),
+          this.separatorThin(),
+          ...salidas.map((m) =>
+            this.alignLeftRight(`  ${m.motivo ?? 'Sin concepto'}`, `-$${m.monto.toFixed(2)}`),
+          ),
+          this.alignLeftRight('  Total salidas', `-$${totalSalidas.toFixed(2)}`),
+        ]
+      : [this.alignLeftRight('Salidas', `-$${totalSalidas.toFixed(2)}`)];
+
+    // Líneas detalladas de gastos
+    const gastosLines: string[] = gastos.length > 0
+      ? [
+          this.separatorThin(),
+          this.center('GASTOS'),
+          this.separatorThin(),
+          ...gastos.map((g) =>
+            this.alignLeftRight(`  ${g.concepto ?? 'Sin concepto'}`, `-$${g.monto.toFixed(2)}`),
+          ),
+          this.alignLeftRight('  Total gastos', `-$${totalGastos.toFixed(2)}`),
+        ]
+      : [this.alignLeftRight('Gastos', `-$${totalGastos.toFixed(2)}`)];
 
     return {
       type: 'CORTE',
@@ -293,10 +334,9 @@ export class TicketsService {
         this.alignLeftRight('  Tarjeta', `$${ventasTarjeta.toFixed(2)}`),
         this.separatorThin(),
         this.center('MOVIMIENTOS'),
-        this.separatorThin(),
-        this.alignLeftRight('Entradas', `$${entradas.toFixed(2)}`),
-        this.alignLeftRight('Salidas', `$${salidas.toFixed(2)}`),
-        this.alignLeftRight('Gastos', `$${gastos.toFixed(2)}`),
+        ...entradasLines,
+        ...salidasLines,
+        ...gastosLines,
         this.separator(),
         this.alignLeftRight('TOTAL EN CAJA', `$${totalFinal.toFixed(2)}`),
         this.separator(),

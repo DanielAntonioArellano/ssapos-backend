@@ -249,19 +249,21 @@ export class OrdersService {
       throw new BadRequestException('La orden ya fue finalizada o cancelada');
     }
 
-    // Validar stock antes de la transacción
-    for (const item of order.items) {
-      if (!item.product) continue;
+    // Validar stock antes de la transacción (solo DELIVERY)
+    if (order.type === 'DELIVERY') {
+      for (const item of order.items) {
+        if (!item.product) continue;
 
-      for (const usage of item.product.inventoryUsage) {
-        const necesidad = usage.quantity * item.quantity;
+        for (const usage of item.product.inventoryUsage) {
+          const necesidad = usage.quantity * item.quantity;
 
-        if (usage.inventoryItem.stock < necesidad) {
-          throw new BadRequestException(
-            `No hay suficiente inventario de ${usage.inventoryItem.name}. ` +
-            `Disponible: ${usage.inventoryItem.stock} ${usage.inventoryItem.unit}, ` +
-            `necesario: ${necesidad} ${usage.inventoryItem.unit}`,
-          );
+          if (usage.inventoryItem.stock < necesidad) {
+            throw new BadRequestException(
+              `No hay suficiente inventario de ${usage.inventoryItem.name}. ` +
+              `Disponible: ${usage.inventoryItem.stock} ${usage.inventoryItem.unit}, ` +
+              `necesario: ${necesidad} ${usage.inventoryItem.unit}`,
+            );
+          }
         }
       }
     }
@@ -301,19 +303,21 @@ export class OrdersService {
         data: { status: 'COMPLETED' },
       });
 
-      // Descontar inventario
-      for (const item of order.items) {
-        if (!item.product) continue;
+      // Descontar inventario (solo DELIVERY)
+      if (order.type === 'DELIVERY') {
+        for (const item of order.items) {
+          if (!item.product) continue;
 
-        for (const usage of item.product.inventoryUsage) {
-          const descontar = usage.quantity * item.quantity;
+          for (const usage of item.product.inventoryUsage) {
+            const descontar = usage.quantity * item.quantity;
 
-          await tx.inventoryItem.update({
-            where: { id: usage.inventoryItemId },
-            data: {
-              stock: { decrement: descontar },
-            },
-          });
+            await tx.inventoryItem.update({
+              where: { id: usage.inventoryItemId },
+              data: {
+                stock: { decrement: descontar },
+              },
+            });
+          }
         }
       }
 

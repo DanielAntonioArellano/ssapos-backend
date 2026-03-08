@@ -7,6 +7,7 @@ import {
   Param,
   ParseIntPipe,
   Patch,
+  Delete,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -21,20 +22,11 @@ import { UpdateOrderStatusDto } from './dto/update-status.dto';
 export class OrdersController {
   constructor(private ordersService: OrdersService) {}
 
-  // ---------------------------------------------------
-  // Crear orden
-  // ---------------------------------------------------
   @Post()
   create(@Req() req, @Body() dto: CreateOrderDto) {
-    return this.ordersService.create(
-      req.user.restaurantId,
-      dto,
-    );
+    return this.ordersService.create(req.user.restaurantId, dto);
   }
 
-  // ---------------------------------------------------
-  // Listar órdenes
-  // ---------------------------------------------------
   @Get()
   list(
     @Req() req,
@@ -42,63 +34,32 @@ export class OrdersController {
     @Query('to') to?: string,
     @Query('status') status?: string,
   ) {
-    return this.ordersService.list(
-      req.user.restaurantId,
-      from,
-      to,
-      status,
-    );
+    return this.ordersService.list(req.user.restaurantId, from, to, status);
   }
 
-  // ---------------------------------------------------
-  // Obtener una orden
-  // ---------------------------------------------------
   @Get(':id')
-  get(
-    @Req() req,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    return this.ordersService.findOne(
-      req.user.restaurantId,
-      id,
-    );
+  get(@Req() req, @Param('id', ParseIntPipe) id: number) {
+    return this.ordersService.findOne(req.user.restaurantId, id);
   }
 
-  // ---------------------------------------------------
-  // Actualizar estado
-  // ---------------------------------------------------
   @Patch(':id/status')
   updateStatus(
     @Req() req,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateOrderStatusDto,
   ) {
-    return this.ordersService.updateStatus(
-      req.user.restaurantId,
-      id,
-      dto.status,
-    );
+    return this.ordersService.updateStatus(req.user.restaurantId, id, dto.status);
   }
 
-  // ---------------------------------------------------
-  // Actualizar orden
-  // ---------------------------------------------------
   @Patch(':id')
   update(
     @Req() req,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateOrderDto,
   ) {
-    return this.ordersService.update(
-      req.user.restaurantId,
-      id,
-      dto,
-    );
+    return this.ordersService.update(req.user.restaurantId, id, dto);
   }
 
-  // ---------------------------------------------------
-  // Cancelar orden
-  // ---------------------------------------------------
   @Post(':id/cancel')
   cancel(
     @Req() req,
@@ -114,9 +75,6 @@ export class OrdersController {
     );
   }
 
-  // ---------------------------------------------------
-  // Checkout (convertir en venta)
-  // ---------------------------------------------------
   @Post(':id/checkout')
   checkout(
     @Req() req,
@@ -129,6 +87,22 @@ export class OrdersController {
       req.user.userId,
       req.user.role,
       body.paymentType,
+    );
+  }
+
+  // ---------------------------------------------------
+  // Eliminar orden (requiere contraseña de admin)
+  // ---------------------------------------------------
+  @Delete(':id')
+  deleteOrder(
+    @Req() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Body('adminPassword') adminPassword: string,
+  ) {
+    return this.ordersService.deleteOrder(
+      req.user.restaurantId,
+      id,
+      adminPassword,
     );
   }
 }

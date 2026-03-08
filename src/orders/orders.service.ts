@@ -225,7 +225,6 @@ export class OrdersService {
       throw new ForbiddenException('Solo el usuario CAJERO puede realizar ventas');
     }
 
-    // Cargar orden con inventario incluido
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, restaurantId },
       include: {
@@ -249,7 +248,7 @@ export class OrdersService {
       throw new BadRequestException('La orden ya fue finalizada o cancelada');
     }
 
-    // Validar stock antes de la transacción (solo DELIVERY)
+    // Validar stock solo para DELIVERY
     if (order.type === 'DELIVERY') {
       for (const item of order.items) {
         if (!item.product) continue;
@@ -277,7 +276,6 @@ export class OrdersService {
         throw new BadRequestException('No hay caja abierta.');
       }
 
-      // Crear venta
       const sale = await tx.sale.create({
         data: {
           restaurantId,
@@ -297,13 +295,12 @@ export class OrdersService {
         },
       });
 
-      // Marcar orden como completada
       await tx.order.update({
         where: { id: orderId },
         data: { status: 'COMPLETED' },
       });
 
-      // Descontar inventario (solo DELIVERY)
+      // Descontar inventario solo para DELIVERY
       if (order.type === 'DELIVERY') {
         for (const item of order.items) {
           if (!item.product) continue;
@@ -377,5 +374,52 @@ export class OrdersService {
       where: { id },
       data: { status: newStatus },
     });
+  }
+
+  // ---------------------------------------------------
+  // Eliminar orden (requiere contraseña de admin)
+  // ---------------------------------------------------
+  async deleteOrder(
+    restaurantId: number,
+    orderId: number,
+    adminPassword: string,
+  ) {
+    if (!adminPassword) {
+      throw new ForbiddenException('Se requiere contraseña de administrador');
+    }
+
+    // Buscar un admin del restaurante y validar contraseña
+    const admins = await this.prisma.user.findMany({
+      where: { restaurantId, role: 'ADMIN' },
+    });
+
+    if (admins.length === 0) {
+      throw new ForbiddenException('No hay administradores en este restaurante');
+    }
+
+    let authorized = false;
+    for (const admin of admins) {
+      const match = await bcrypt.compare(adminPassword, admin.password);
+      if (match) {
+        authorized = true;
+        break;
+      }
+    }
+
+    if (!authorized) {
+      throw new ForbiddenException('Contraseña de administrador incorrecta');
+    }
+
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, restaurantId },
+    });
+
+    if (!order) throw new NotFoundException('Orden no encontrada');
+
+    // Eliminar items primero, luego la orden
+    await this.prisma.orderItem.deleteMany({ where: { orderId } });
+    await this.prisma.order.delete({ where: { id: orderId } });
+
+    return { ok: true, message: `Orden #${orderId} eliminada correctamente` };
   }
 }

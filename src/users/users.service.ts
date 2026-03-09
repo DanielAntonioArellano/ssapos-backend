@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 
@@ -58,7 +58,7 @@ export class UsersService {
     return this.prisma.user.findUnique({
       where: { email },
       include: {
-        restaurant: true, // 🔥 necesario para validar activo/inactivo
+        restaurant: true,
       },
     });
   }
@@ -89,17 +89,51 @@ export class UsersService {
       },
     });
   }
+
   async findByEmailWithRestaurant(email: string) {
-  return this.prisma.user.findUnique({
-    where: { email },
-    include: {
-      restaurant: true,
-    },
-  });
-}
-async findAll() {
-  return this.prisma.user.findMany({
-    include: { restaurant: true },
-  });
-}
+    return this.prisma.user.findUnique({
+      where: { email },
+      include: {
+        restaurant: true,
+      },
+    });
+  }
+
+  async findAll() {
+    return this.prisma.user.findMany({
+      include: { restaurant: true },
+    });
+  }
+
+  // -----------------------------------------
+  // Cambiar contraseña (ADMIN o SuperAdmin)
+  // -----------------------------------------
+  async changePassword(
+    userId: number,
+    newPassword: string,
+    requestorRestaurantId: number | null,
+    isSuperAdmin: boolean,
+  ) {
+    if (!newPassword || newPassword.length < 6) {
+      throw new BadRequestException('La contraseña debe tener al menos 6 caracteres');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+
+    // ADMIN solo puede cambiar contraseñas de usuarios de su mismo restaurante
+    if (!isSuperAdmin && user.restaurantId !== requestorRestaurantId) {
+      throw new ForbiddenException('No puedes modificar usuarios de otro restaurante');
+    }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hash },
+    });
+
+    return { ok: true, message: 'Contraseña actualizada correctamente' };
+  }
 }

@@ -110,12 +110,16 @@ export class UsersService {
   // -----------------------------------------
   async changePassword(
     userId: number,
+    currentPassword: string,
     newPassword: string,
     requestorRestaurantId: number | null,
     isSuperAdmin: boolean,
   ) {
+    if (!currentPassword) {
+      throw new BadRequestException('Ingresa la contraseña actual del usuario');
+    }
     if (!newPassword || newPassword.length < 6) {
-      throw new BadRequestException('La contraseña debe tener al menos 6 caracteres');
+      throw new BadRequestException('La nueva contraseña debe tener al menos 6 caracteres');
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -125,6 +129,12 @@ export class UsersService {
     // ADMIN solo puede cambiar contraseñas de usuarios de su mismo restaurante
     if (!isSuperAdmin && user.restaurantId !== requestorRestaurantId) {
       throw new ForbiddenException('No puedes modificar usuarios de otro restaurante');
+    }
+
+    // Validar contraseña actual del usuario objetivo
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+      throw new ForbiddenException('La contraseña actual es incorrecta');
     }
 
     const hash = await bcrypt.hash(newPassword, 10);

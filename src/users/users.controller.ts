@@ -68,7 +68,7 @@ export class UsersController {
   changePassword(
     @Req() req,
     @Param('id') id: string,
-    @Body() dto: { newPassword: string },
+    @Body() dto: { currentPassword: string; newPassword: string },
   ) {
     if (!req.user.isSuperAdmin && req.user.role !== 'ADMIN') {
       throw new ForbiddenException('Solo un ADMIN puede cambiar contraseñas');
@@ -76,6 +76,7 @@ export class UsersController {
 
     return this.users.changePassword(
       +id,
+      dto.currentPassword,
       dto.newPassword,
       req.user.restaurantId,
       req.user.isSuperAdmin,

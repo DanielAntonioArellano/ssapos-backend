@@ -128,6 +128,7 @@ export class CajaService {
     userRole: string,
     userId: number,
     password: string,
+    fondoFinal?: number,
   ) {
     if (userRole !== 'CAJERO') {
       throw new ForbiddenException('Solo el usuario CAJERO puede cerrar caja');
@@ -148,7 +149,7 @@ export class CajaService {
       throw new BadRequestException('No hay caja abierta');
     }
 
-    // ✅ Validar órdenes pendientes
+    // Validar órdenes pendientes
     const ordenesPendientes = await this.prisma.order.count({
       where: {
         restaurantId,
@@ -160,6 +161,26 @@ export class CajaService {
       throw new BadRequestException(
         `Hay ${ordenesPendientes} orden(es) pendientes. Complétalas o cancélalas antes de cerrar.`,
       );
+    }
+
+    // Si se indicó fondo final, registrarlo como SALIDA antes de calcular totales
+    if (fondoFinal && fondoFinal > 0) {
+      await this.prisma.movimiento.create({
+        data: {
+          tipo: 'SALIDA',
+          monto: fondoFinal,
+          descripcion: 'Fondo para siguiente turno',
+          userId,
+          cajaId: caja.id,
+          restaurantId,
+        },
+      });
+
+      // Recargar movimientos con el fondo ya incluido
+      const movimientosActualizados = await this.prisma.movimiento.findMany({
+        where: { cajaId: caja.id },
+      });
+      caja.movimientos = movimientosActualizados;
     }
 
     let efectivo = 0;

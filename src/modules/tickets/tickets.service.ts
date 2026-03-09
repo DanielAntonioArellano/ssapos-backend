@@ -71,7 +71,6 @@ export class TicketsService {
         data: { folioVenta: { increment: 1 } },
       });
 
-      // Calcular subtotal real (suma de precios sin descuento)
       const subtotalReal = sale.items.reduce(
         (s, item) => s + item.priceUnit * item.quantity,
         0,
@@ -263,16 +262,23 @@ export class TicketsService {
 
     const totalVentas = ventasEfectivo + ventasTarjeta;
 
+    // Separar fondo del siguiente turno del resto de salidas
+    const fondo = caja.movimientos.find(
+      (m) => m.tipo === 'SALIDA' && m.descripcion === 'Fondo para siguiente turno',
+    );
     const entradas = caja.movimientos.filter((m) => m.tipo === 'ENTRADA');
-    const salidas  = caja.movimientos.filter((m) => m.tipo === 'SALIDA');
-    const gastos   = caja.gastos;
+    const salidas  = caja.movimientos.filter(
+      (m) => m.tipo === 'SALIDA' && m.descripcion !== 'Fondo para siguiente turno',
+    );
+    const gastos = caja.gastos;
 
     const totalEntradas = entradas.reduce((s, m) => s + m.monto, 0);
     const totalSalidas  = salidas.reduce((s, m) => s + m.monto, 0);
     const totalGastos   = gastos.reduce((s, g) => s + g.monto, 0);
+    const totalFondo    = fondo?.monto ?? 0;
 
     const totalFinal =
-      caja.montoInicial + ventasEfectivo + totalEntradas - totalSalidas - totalGastos;
+      caja.montoInicial + ventasEfectivo + totalEntradas - totalSalidas - totalGastos - totalFondo;
 
     // Líneas detalladas de entradas
     const entradasLines: string[] = entradas.length > 0
@@ -281,20 +287,26 @@ export class TicketsService {
           this.center('ENTRADAS'),
           this.separatorThin(),
           ...entradas.map((m) =>
-            this.alignLeftRight(`  ${m.motivo ?? 'Sin concepto'}`, `$${m.monto.toFixed(2)}`),
+            this.alignLeftRight(
+              `  ${m.descripcion ?? 'Sin concepto'}`,
+              `$${m.monto.toFixed(2)}`,
+            ),
           ),
           this.alignLeftRight('  Total entradas', `$${totalEntradas.toFixed(2)}`),
         ]
       : [this.alignLeftRight('Entradas', `$${totalEntradas.toFixed(2)}`)];
 
-    // Líneas detalladas de salidas
+    // Líneas detalladas de salidas (excluye fondo)
     const salidasLines: string[] = salidas.length > 0
       ? [
           this.separatorThin(),
           this.center('SALIDAS'),
           this.separatorThin(),
           ...salidas.map((m) =>
-            this.alignLeftRight(`  ${m.motivo ?? 'Sin concepto'}`, `-$${m.monto.toFixed(2)}`),
+            this.alignLeftRight(
+              `  ${m.descripcion ?? 'Sin concepto'}`,
+              `-$${m.monto.toFixed(2)}`,
+            ),
           ),
           this.alignLeftRight('  Total salidas', `-$${totalSalidas.toFixed(2)}`),
         ]
@@ -307,11 +319,24 @@ export class TicketsService {
           this.center('GASTOS'),
           this.separatorThin(),
           ...gastos.map((g) =>
-            this.alignLeftRight(`  ${g.concepto ?? 'Sin concepto'}`, `-$${g.monto.toFixed(2)}`),
+            this.alignLeftRight(
+              `  ${g.concepto ?? 'Sin concepto'}`,
+              `-$${g.monto.toFixed(2)}`,
+            ),
           ),
           this.alignLeftRight('  Total gastos', `-$${totalGastos.toFixed(2)}`),
         ]
       : [this.alignLeftRight('Gastos', `-$${totalGastos.toFixed(2)}`)];
+
+    // Línea de fondo (solo si existe)
+    const fondoLines: string[] = fondo
+      ? [
+          this.separatorThin(),
+          this.center('FONDO SIGUIENTE TURNO'),
+          this.separatorThin(),
+          this.alignLeftRight('  Fondo retirado', `-$${totalFondo.toFixed(2)}`),
+        ]
+      : [];
 
     return {
       type: 'CORTE',
@@ -337,6 +362,7 @@ export class TicketsService {
         ...entradasLines,
         ...salidasLines,
         ...gastosLines,
+        ...fondoLines,
         this.separator(),
         this.alignLeftRight('TOTAL EN CAJA', `$${totalFinal.toFixed(2)}`),
         this.separator(),

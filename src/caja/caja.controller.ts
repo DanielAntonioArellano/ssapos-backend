@@ -53,12 +53,17 @@ export class CajaController {
   }
 
   @Post('cerrar')
-  async cerrar(@Req() req, @Body('password') password: string) {
+  async cerrar(
+    @Req() req,
+    @Body('password') password: string,
+    @Body('fondoFinal') fondoFinal?: number,
+  ) {
     return this.cajaService.cerrarCaja(
       req.user.restaurantId,
       req.user.role,
       req.user.userId,
       password,
+      fondoFinal,
     );
   }
 

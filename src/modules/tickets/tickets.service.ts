@@ -78,6 +78,11 @@ export class TicketsService {
       const descuento = subtotalReal - sale.total;
       const hayDescuento = descuento > 0.01;
 
+      // Propina (campo `tip` en el modelo Sale, puede ser null/0)
+      const tip: number = (sale as any).tip ?? 0;
+      const hayPropina = tip > 0.001;
+      const totalConPropina = sale.total + tip;
+
       const itemLines: string[] = [];
       for (const item of sale.items) {
         const name = item.product?.name ?? item.customName ?? 'Producto';
@@ -110,8 +115,14 @@ export class TicketsService {
             ? [this.alignLeftRight('Descuento', `-$${descuento.toFixed(2)}`)]
             : []),
           this.alignLeftRight('Metodo de pago', sale.payment ?? ''),
+          ...(hayPropina
+            ? [this.alignLeftRight('Propina (tarjeta)', `$${tip.toFixed(2)}`)]
+            : []),
           this.separator(),
           this.alignLeftRight('TOTAL', `$${sale.total.toFixed(2)}`),
+          ...(hayPropina
+            ? [this.alignLeftRight('TOTAL + PROPINA', `$${totalConPropina.toFixed(2)}`)]
+            : []),
           this.separator(),
           this.center('*** Gracias por su compra ***'),
           this.center('Conserve su ticket'),
@@ -262,6 +273,11 @@ export class TicketsService {
 
     const totalVentas = ventasEfectivo + ventasTarjeta;
 
+    // ── Propinas acumuladas del turno ──
+    const propinasTotal = caja.ventas
+      .reduce((s, v) => s + ((v as any).tip ?? 0), 0);
+    const hayPropinas = propinasTotal > 0.001;
+
     // Separar fondo del siguiente turno del resto de salidas
     const fondo = caja.movimientos.find(
       (m) => m.tipo === 'SALIDA' && m.descripcion === 'Fondo para siguiente turno',
@@ -338,6 +354,17 @@ export class TicketsService {
         ]
       : [];
 
+    // ── Bloque de propinas (solo si hay) ──
+    const propinasLines: string[] = hayPropinas
+      ? [
+          this.separatorThin(),
+          this.center('PROPINAS'),
+          this.separatorThin(),
+          this.alignLeftRight('  Tarjeta / Transferencia', `$${propinasTotal.toFixed(2)}`),
+          this.alignLeftRight('  Total propinas', `$${propinasTotal.toFixed(2)}`),
+        ]
+      : [];
+
     return {
       type: 'CORTE',
       width: 48,
@@ -363,8 +390,12 @@ export class TicketsService {
         ...salidasLines,
         ...gastosLines,
         ...fondoLines,
+        ...propinasLines,
         this.separator(),
         this.alignLeftRight('TOTAL EN CAJA', `$${totalFinal.toFixed(2)}`),
+        ...(hayPropinas
+          ? [this.alignLeftRight('PROPINAS DEL TURNO', `$${propinasTotal.toFixed(2)}`)]
+          : []),
         this.separator(),
         this.center('Corte generado correctamente'),
         '\n\n\n',

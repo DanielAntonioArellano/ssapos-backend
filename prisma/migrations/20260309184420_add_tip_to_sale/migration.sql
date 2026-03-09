@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Sale" ADD COLUMN     "tip" DOUBLE PRECISION DEFAULT 0;

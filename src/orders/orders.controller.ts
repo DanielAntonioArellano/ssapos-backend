@@ -79,7 +79,7 @@ export class OrdersController {
   checkout(
     @Req() req,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { paymentType: 'EFECTIVO' | 'TARJETA' },
+    @Body() body: { paymentType: 'EFECTIVO' | 'TARJETA'; tip?: number }, // ← tip opcional
   ) {
     return this.ordersService.checkout(
       req.user.restaurantId,
@@ -87,12 +87,10 @@ export class OrdersController {
       req.user.userId,
       req.user.role,
       body.paymentType,
+      body.tip,           // ← pasar tip al service
     );
   }
 
-  // ---------------------------------------------------
-  // Eliminar orden (requiere contraseña de admin)
-  // ---------------------------------------------------
   @Delete(':id')
   deleteOrder(
     @Req() req,

@@ -216,10 +216,14 @@ export class OrdersService {
     currentUserId: number,
     currentUserRole: string,
     paymentType: 'EFECTIVO' | 'TARJETA',
+    tip?: number,                          // ← nuevo parámetro opcional
   ) {
     if (!paymentType || !['EFECTIVO', 'TARJETA'].includes(paymentType)) {
       throw new BadRequestException('paymentType es requerido: EFECTIVO o TARJETA');
     }
+
+    // Propina solo aplica para tarjeta
+    const tipAmount = paymentType === 'TARJETA' ? (tip ?? 0) : 0;
 
     if (currentUserRole !== 'CAJERO') {
       throw new ForbiddenException('Solo el usuario CAJERO puede realizar ventas');
@@ -283,6 +287,7 @@ export class OrdersService {
           cajaId: caja.id,
           total: order.total,
           payment: paymentType,
+          tip: tipAmount,                  // ← guardar propina
           items: {
             create: order.items.map((it) => ({
               productId: it.productId ?? null,
@@ -376,9 +381,6 @@ export class OrdersService {
     });
   }
 
-  // ---------------------------------------------------
-  // Eliminar orden (requiere contraseña de admin)
-  // ---------------------------------------------------
   async deleteOrder(
     restaurantId: number,
     orderId: number,
@@ -388,7 +390,6 @@ export class OrdersService {
       throw new ForbiddenException('Se requiere contraseña de administrador');
     }
 
-    // Buscar un admin del restaurante y validar contraseña
     const admins = await this.prisma.user.findMany({
       where: { restaurantId, role: 'ADMIN' },
     });
@@ -416,7 +417,6 @@ export class OrdersService {
 
     if (!order) throw new NotFoundException('Orden no encontrada');
 
-    // Eliminar items primero, luego la orden
     await this.prisma.orderItem.deleteMany({ where: { orderId } });
     await this.prisma.order.delete({ where: { id: orderId } });
 

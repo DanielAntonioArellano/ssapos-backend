@@ -145,6 +145,7 @@ model Product {
   stock        Int
   imageUrl     String?
   createdAt    DateTime @default(now())
+  deletedAt DateTime? 
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id])
 
@@ -178,6 +179,7 @@ model Sale {
   cajaId       Int?
   total        Float
   payment      String
+  tip Float? @default(0)
   createdAt    DateTime @default(now())
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id])

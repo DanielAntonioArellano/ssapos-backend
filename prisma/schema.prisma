@@ -260,6 +260,7 @@ model Order {
   clientPhone  String?
   clientNotes  String?
   status       OrderStatus @default(ORDERED)
+  cancelConcepto  String?
   total        Float    @default(0)
 
   type         OrderType @default(DELIVERY) 

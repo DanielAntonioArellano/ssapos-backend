@@ -64,14 +64,13 @@ export class OrdersController {
   cancel(
     @Req() req,
     @Param('id', ParseIntPipe) id: number,
-    @Body('password') password: string,
+    @Body() body: { adminPassword: string; concepto: string },
   ) {
     return this.ordersService.cancel(
       req.user.restaurantId,
       id,
-      req.user.userId,
-      req.user.role,
-      password,
+      body.adminPassword,
+      body.concepto,
     );
   }
 
@@ -79,7 +78,7 @@ export class OrdersController {
   checkout(
     @Req() req,
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { paymentType: 'EFECTIVO' | 'TARJETA'; tip?: number }, // ← tip opcional
+    @Body() body: { paymentType: 'EFECTIVO' | 'TARJETA'; tip?: number },
   ) {
     return this.ordersService.checkout(
       req.user.restaurantId,
@@ -87,7 +86,7 @@ export class OrdersController {
       req.user.userId,
       req.user.role,
       body.paymentType,
-      body.tip,           // ← pasar tip al service
+      body.tip,
     );
   }
 

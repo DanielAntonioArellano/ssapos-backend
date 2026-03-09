@@ -15,15 +15,33 @@ export class OrdersService {
 
   private async validarPassword(userId: number, password: string) {
     if (!password) throw new ForbiddenException('Se requiere contraseña');
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new ForbiddenException('Usuario no encontrado');
-
     const match = await bcrypt.compare(password, user.password);
     if (!match) throw new ForbiddenException('Contraseña incorrecta');
+  }
+
+  // Valida que la contraseña corresponda a cualquier admin del restaurante
+  private async validarAdmin(restaurantId: number, password: string) {
+    if (!password) throw new ForbiddenException('Se requiere contraseña de administrador');
+
+    const admins = await this.prisma.user.findMany({
+      where: { restaurantId, role: 'ADMIN' },
+    });
+
+    if (admins.length === 0) {
+      throw new ForbiddenException('No hay administradores en este restaurante');
+    }
+
+    let authorized = false;
+    for (const admin of admins) {
+      const match = await bcrypt.compare(password, admin.password);
+      if (match) { authorized = true; break; }
+    }
+
+    if (!authorized) {
+      throw new ForbiddenException('Contraseña de administrador incorrecta');
+    }
   }
 
   async create(restaurantId: number, dto: CreateOrderDto) {
@@ -31,10 +49,7 @@ export class OrdersService {
       const user = await this.prisma.user.findFirst({
         where: { id: dto.userId, restaurantId },
       });
-
-      if (!user) {
-        throw new ForbiddenException('Usuario no pertenece a este restaurante');
-      }
+      if (!user) throw new ForbiddenException('Usuario no pertenece a este restaurante');
     }
 
     if (dto.type === 'DINE_IN' && !dto.tableNumber) {
@@ -54,32 +69,11 @@ export class OrdersService {
         const product = await this.prisma.product.findFirst({
           where: { id: i.productId, restaurantId },
         });
-
-        if (!product) {
-          throw new NotFoundException(
-            `Producto ${i.productId} no pertenece a este restaurante`,
-          );
-        }
-
-        itemsData.push({
-          productId: i.productId,
-          customName: null,
-          quantity: i.quantity,
-          priceUnit: i.priceUnit,
-          subtotal: i.priceUnit * i.quantity,
-        });
+        if (!product) throw new NotFoundException(`Producto ${i.productId} no pertenece a este restaurante`);
+        itemsData.push({ productId: i.productId, customName: null, quantity: i.quantity, priceUnit: i.priceUnit, subtotal: i.priceUnit * i.quantity });
       } else {
-        if (!i.customName) {
-          throw new BadRequestException('Custom items require customName');
-        }
-
-        itemsData.push({
-          productId: null,
-          customName: i.customName,
-          quantity: i.quantity,
-          priceUnit: i.priceUnit,
-          subtotal: i.priceUnit * i.quantity,
-        });
+        if (!i.customName) throw new BadRequestException('Custom items require customName');
+        itemsData.push({ productId: null, customName: i.customName, quantity: i.quantity, priceUnit: i.priceUnit, subtotal: i.priceUnit * i.quantity });
       }
     }
 
@@ -98,26 +92,16 @@ export class OrdersService {
         tableNumber: dto.type === 'DINE_IN' ? dto.tableNumber : null,
         items: { create: itemsData },
       },
-      include: {
-        items: { include: { product: true } },
-      },
+      include: { items: { include: { product: true } } },
     });
   }
 
   async list(restaurantId: number, from?: string, to?: string, status?: string) {
     const where: any = { restaurantId };
-
     if (from && to) {
-      where.createdAt = {
-        gte: new Date(from),
-        lte: new Date(to),
-      };
+      where.createdAt = { gte: new Date(from), lte: new Date(to) };
     }
-
-    if (status) {
-      where.status = status;
-    }
-
+    if (status) where.status = status;
     return this.prisma.order.findMany({
       where,
       include: { items: { include: { product: true } } },
@@ -130,22 +114,13 @@ export class OrdersService {
       where: { id, restaurantId },
       include: { items: { include: { product: true } } },
     });
-
-    if (!order) {
-      throw new NotFoundException(
-        'Orden no encontrada o no pertenece a este restaurante',
-      );
-    }
-
+    if (!order) throw new NotFoundException('Orden no encontrada o no pertenece a este restaurante');
     return order;
   }
 
   async update(restaurantId: number, id: number, dto: UpdateOrderDto) {
     const order = await this.findOne(restaurantId, id);
-
-    if (order.status !== 'ORDERED') {
-      throw new BadRequestException('Solo se pueden actualizar órdenes ORDERED');
-    }
+    if (order.status !== 'ORDERED') throw new BadRequestException('Solo se pueden actualizar órdenes ORDERED');
 
     const updateData: any = {
       clientName: dto.clientName ?? order.clientName,
@@ -154,53 +129,21 @@ export class OrdersService {
     };
 
     if (dto.items) {
-      const itemsData: {
-        productId: number | null;
-        customName: string | null;
-        quantity: number;
-        priceUnit: number;
-        subtotal: number;
-      }[] = [];
+      const itemsData: { productId: number | null; customName: string | null; quantity: number; priceUnit: number; subtotal: number; }[] = [];
 
       for (const i of dto.items) {
         if (i.productId) {
-          const product = await this.prisma.product.findFirst({
-            where: { id: i.productId, restaurantId },
-          });
-
-          if (!product) {
-            throw new NotFoundException(
-              `Producto ${i.productId} no pertenece a este restaurante`,
-            );
-          }
-
-          itemsData.push({
-            productId: i.productId,
-            customName: null,
-            quantity: i.quantity,
-            priceUnit: i.priceUnit,
-            subtotal: i.priceUnit * i.quantity,
-          });
+          const product = await this.prisma.product.findFirst({ where: { id: i.productId, restaurantId } });
+          if (!product) throw new NotFoundException(`Producto ${i.productId} no pertenece a este restaurante`);
+          itemsData.push({ productId: i.productId, customName: null, quantity: i.quantity, priceUnit: i.priceUnit, subtotal: i.priceUnit * i.quantity });
         } else {
-          if (!i.customName) {
-            throw new BadRequestException('Custom items require customName');
-          }
-
-          itemsData.push({
-            productId: null,
-            customName: i.customName,
-            quantity: i.quantity,
-            priceUnit: i.priceUnit,
-            subtotal: i.priceUnit * i.quantity,
-          });
+          if (!i.customName) throw new BadRequestException('Custom items require customName');
+          itemsData.push({ productId: null, customName: i.customName, quantity: i.quantity, priceUnit: i.priceUnit, subtotal: i.priceUnit * i.quantity });
         }
       }
 
       updateData.total = itemsData.reduce((s, x) => s + x.subtotal, 0);
-      updateData.items = {
-        deleteMany: {},
-        create: itemsData,
-      };
+      updateData.items = { deleteMany: {}, create: itemsData };
     }
 
     return this.prisma.order.update({
@@ -216,13 +159,12 @@ export class OrdersService {
     currentUserId: number,
     currentUserRole: string,
     paymentType: 'EFECTIVO' | 'TARJETA',
-    tip?: number,                          // ← nuevo parámetro opcional
+    tip?: number,
   ) {
     if (!paymentType || !['EFECTIVO', 'TARJETA'].includes(paymentType)) {
       throw new BadRequestException('paymentType es requerido: EFECTIVO o TARJETA');
     }
 
-    // Propina solo aplica para tarjeta
     const tipAmount = paymentType === 'TARJETA' ? (tip ?? 0) : 0;
 
     if (currentUserRole !== 'CAJERO') {
@@ -234,32 +176,22 @@ export class OrdersService {
       include: {
         items: {
           include: {
-            product: {
-              include: {
-                inventoryUsage: {
-                  include: { inventoryItem: true },
-                },
-              },
-            },
+            product: { include: { inventoryUsage: { include: { inventoryItem: true } } } },
           },
         },
       },
     });
 
     if (!order) throw new NotFoundException('Orden no encontrada');
-
     if (order.status === 'COMPLETED' || order.status === 'CANCELLED') {
       throw new BadRequestException('La orden ya fue finalizada o cancelada');
     }
 
-    // Validar stock solo para DELIVERY
     if (order.type === 'DELIVERY') {
       for (const item of order.items) {
         if (!item.product) continue;
-
         for (const usage of item.product.inventoryUsage) {
           const necesidad = usage.quantity * item.quantity;
-
           if (usage.inventoryItem.stock < necesidad) {
             throw new BadRequestException(
               `No hay suficiente inventario de ${usage.inventoryItem.name}. ` +
@@ -272,13 +204,8 @@ export class OrdersService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const caja = await tx.caja.findFirst({
-        where: { restaurantId, fechaCierre: null },
-      });
-
-      if (!caja) {
-        throw new BadRequestException('No hay caja abierta.');
-      }
+      const caja = await tx.caja.findFirst({ where: { restaurantId, fechaCierre: null } });
+      if (!caja) throw new BadRequestException('No hay caja abierta.');
 
       const sale = await tx.sale.create({
         data: {
@@ -287,7 +214,7 @@ export class OrdersService {
           cajaId: caja.id,
           total: order.total,
           payment: paymentType,
-          tip: tipAmount,                  // ← guardar propina
+          tip: tipAmount,
           items: {
             create: order.items.map((it) => ({
               productId: it.productId ?? null,
@@ -300,24 +227,15 @@ export class OrdersService {
         },
       });
 
-      await tx.order.update({
-        where: { id: orderId },
-        data: { status: 'COMPLETED' },
-      });
+      await tx.order.update({ where: { id: orderId }, data: { status: 'COMPLETED' } });
 
-      // Descontar inventario solo para DELIVERY
       if (order.type === 'DELIVERY') {
         for (const item of order.items) {
           if (!item.product) continue;
-
           for (const usage of item.product.inventoryUsage) {
-            const descontar = usage.quantity * item.quantity;
-
             await tx.inventoryItem.update({
               where: { id: usage.inventoryItemId },
-              data: {
-                stock: { decrement: descontar },
-              },
+              data: { stock: { decrement: usage.quantity * item.quantity } },
             });
           }
         }
@@ -327,28 +245,31 @@ export class OrdersService {
     });
   }
 
+  // ── CANCELAR: requiere concepto + contraseña de admin ──
   async cancel(
     restaurantId: number,
     id: number,
-    userId: number,
-    role: string,
-    password: string,
+    adminPassword: string,
+    concepto: string,
   ) {
-    if (role !== 'CAJERO') {
-      throw new ForbiddenException('Solo el usuario CAJERO puede cancelar órdenes');
+    if (!concepto?.trim()) {
+      throw new BadRequestException('El motivo de cancelación es requerido');
     }
 
-    await this.validarPassword(userId, password);
+    await this.validarAdmin(restaurantId, adminPassword);
 
     const order = await this.findOne(restaurantId, id);
 
-    if (order.status !== 'ORDERED') {
-      throw new BadRequestException('Solo se pueden cancelar órdenes ORDERED');
+    if (order.status === 'COMPLETED' || order.status === 'CANCELLED') {
+      throw new BadRequestException('La orden ya fue finalizada o cancelada');
     }
 
     return this.prisma.order.update({
       where: { id },
-      data: { status: 'CANCELLED' },
+      data: {
+        status: 'CANCELLED',
+        cancelConcepto: concepto.trim(),   // ← campo nuevo en modelo Order
+      },
     });
   }
 
@@ -363,58 +284,25 @@ export class OrdersService {
       throw new BadRequestException('No se puede modificar una orden finalizada');
     }
 
-    const allowedTransitions = {
+    const allowedTransitions: Record<string, string[]> = {
       ORDERED: ['PREPARATION'],
       PREPARATION: ['DELIVERY', 'ORDERED'],
       DELIVERY: ['PREPARATION'],
     };
 
     if (!allowedTransitions[order.status]?.includes(newStatus)) {
-      throw new BadRequestException(
-        `Transición no permitida de ${order.status} a ${newStatus}`,
-      );
+      throw new BadRequestException(`Transición no permitida de ${order.status} a ${newStatus}`);
     }
 
-    return this.prisma.order.update({
-      where: { id },
-      data: { status: newStatus },
-    });
+    return this.prisma.order.update({ where: { id }, data: { status: newStatus } });
   }
 
-  async deleteOrder(
-    restaurantId: number,
-    orderId: number,
-    adminPassword: string,
-  ) {
-    if (!adminPassword) {
-      throw new ForbiddenException('Se requiere contraseña de administrador');
-    }
+  async deleteOrder(restaurantId: number, orderId: number, adminPassword: string) {
+    if (!adminPassword) throw new ForbiddenException('Se requiere contraseña de administrador');
 
-    const admins = await this.prisma.user.findMany({
-      where: { restaurantId, role: 'ADMIN' },
-    });
+    await this.validarAdmin(restaurantId, adminPassword);
 
-    if (admins.length === 0) {
-      throw new ForbiddenException('No hay administradores en este restaurante');
-    }
-
-    let authorized = false;
-    for (const admin of admins) {
-      const match = await bcrypt.compare(adminPassword, admin.password);
-      if (match) {
-        authorized = true;
-        break;
-      }
-    }
-
-    if (!authorized) {
-      throw new ForbiddenException('Contraseña de administrador incorrecta');
-    }
-
-    const order = await this.prisma.order.findFirst({
-      where: { id: orderId, restaurantId },
-    });
-
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, restaurantId } });
     if (!order) throw new NotFoundException('Orden no encontrada');
 
     await this.prisma.orderItem.deleteMany({ where: { orderId } });

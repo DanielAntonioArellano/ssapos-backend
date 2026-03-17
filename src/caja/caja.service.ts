@@ -57,7 +57,11 @@ export class CajaService {
     return this.prisma.caja.findFirst({
       where: { restaurantId, fechaCierre: null },
       include: {
-        ventas: { include: { items: true } },
+        ventas: {
+          include: {
+            items: { include: { product: true } },
+          },
+        },
         gastos: true,
         movimientos: true,
         user: true,
@@ -149,7 +153,6 @@ export class CajaService {
       throw new BadRequestException('No hay caja abierta');
     }
 
-    // Validar órdenes pendientes
     const ordenesPendientes = await this.prisma.order.count({
       where: {
         restaurantId,
@@ -163,7 +166,6 @@ export class CajaService {
       );
     }
 
-    // Si se indicó fondo final, registrarlo como SALIDA antes de calcular totales
     if (fondoFinal && fondoFinal > 0) {
       await this.prisma.movimiento.create({
         data: {
@@ -176,7 +178,6 @@ export class CajaService {
         },
       });
 
-      // Recargar movimientos con el fondo ya incluido
       const movimientosActualizados = await this.prisma.movimiento.findMany({
         where: { cajaId: caja.id },
       });
@@ -222,9 +223,14 @@ export class CajaService {
     return this.prisma.caja.findMany({
       where: { restaurantId },
       include: {
-        ventas: true,
+        ventas: {
+          include: {
+            items: { include: { product: true } },
+          },
+        },
         gastos: true,
         movimientos: true,
+        user: true,
       },
       orderBy: { fechaApertura: 'desc' },
     });

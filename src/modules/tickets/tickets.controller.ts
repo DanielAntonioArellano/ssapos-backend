@@ -1,4 +1,3 @@
-// src/modules/tickets/tickets.controller.ts
 import {
   Controller,
   Get,
@@ -6,6 +5,7 @@ import {
   Param,
   ParseIntPipe,
   Req,
+  Body,
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
@@ -79,6 +79,26 @@ export class TicketsController {
     return { ok: true, message: 'Corte enviado a impresora' };
   }
 
+  // ── Cuenta parcial (división de cuenta) ────────────
+
+  @Post('print/cuenta-parcial')
+  async printCuentaParcial(
+    @Req() req: any,
+    @Body() body: {
+      numeroCuenta: number;
+      items: { name: string; quantity: number; subtotal: number }[];
+      subtotal: number;
+      descuento?: number;
+      total: number;
+      payment: string;
+    },
+  ) {
+    const restaurantId = req.user.restaurantId;
+    const lines = this.ticketsService.buildCuentaParcialLines(body);
+    await this.emitOrFallback(restaurantId, 'CAJA', lines);
+    return { ok: true, message: `Cuenta ${body.numeroCuenta} enviada a impresora` };
+  }
+
   // ── Helper ─────────────────────────────────────────
 
   private async emitOrFallback(
@@ -98,7 +118,6 @@ export class TicketsController {
       return;
     }
 
-    // Fallback TCP directo
     await this.printerService.printByRole(restaurantId, role, lines);
   }
 }

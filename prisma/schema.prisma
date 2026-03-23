@@ -274,6 +274,7 @@ model Order {
   restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
   user       User?       @relation(fields: [userId], references: [id])
   items      OrderItem[]
+  sales      Sale[]
 }
 
 model OrderItem {

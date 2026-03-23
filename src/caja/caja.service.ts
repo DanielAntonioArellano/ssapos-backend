@@ -30,6 +30,20 @@ export class CajaService {
     }
   }
 
+  // Include reutilizable para ventas con datos de cliente
+  private get ventasInclude() {
+    return {
+      items: { include: { product: true } },
+      order: {                          // ← relación Sale → Order
+        select: {
+          clientName: true,
+          clientPhone: true,
+          type: true,
+        },
+      },
+    };
+  }
+
   async abrirCaja(
     restaurantId: number,
     userId: number,
@@ -58,9 +72,7 @@ export class CajaService {
       where: { restaurantId, fechaCierre: null },
       include: {
         ventas: {
-          include: {
-            items: { include: { product: true } },
-          },
+          include: this.ventasInclude,
         },
         gastos: true,
         movimientos: true,
@@ -224,9 +236,7 @@ export class CajaService {
       where: { restaurantId },
       include: {
         ventas: {
-          include: {
-            items: { include: { product: true } },
-          },
+          include: this.ventasInclude,
         },
         gastos: true,
         movimientos: true,

@@ -181,7 +181,9 @@ model Sale {
   payment      String
   tip Float? @default(0)
   createdAt    DateTime @default(now())
-
+  orderId  Int?
+  
+  order    Order? @relation(fields: [orderId], references: [id])
   restaurant Restaurant @relation(fields: [restaurantId], references: [id])
   user       User       @relation(fields: [userId], references: [id])
   caja       Caja?      @relation(fields: [cajaId], references: [id])

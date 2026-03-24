@@ -18,6 +18,7 @@ export class VentasService {
     data: {
       userId: number;
       cajaId?: number;
+      orderId?: number;
       payment: string;
       items: {
         productId: number;
@@ -90,6 +91,7 @@ export class VentasService {
         restaurantId,
         userId: data.userId,
         cajaId: data.cajaId,
+        orderId: data.orderId ?? null,
         total,
         payment: data.payment,
         items: {

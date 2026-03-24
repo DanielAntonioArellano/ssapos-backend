@@ -212,6 +212,7 @@ export class OrdersService {
           restaurantId,
           userId: currentUserId,
           cajaId: caja.id,
+          orderId: order.id,
           total: order.total,
           payment: paymentType,
           tip: tipAmount,

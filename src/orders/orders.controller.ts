@@ -35,7 +35,7 @@ export class OrdersController {
     @Query('status') status?: string,
     @Query('type') type?: string,  
   ) {
-    return this.ordersService.list(req.user.restaurantId, from, to, status);
+    return this.ordersService.list(req.user.restaurantId, from, to, status, type);
   }
 
   @Get(':id')

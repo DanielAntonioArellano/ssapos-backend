@@ -250,10 +250,10 @@ export class TicketsService {
       : [this.alignLeftRight('Entradas', `$${totalEntradas.toFixed(2)}`)];
 
     const salidasLines = salidas.length > 0
-      ? [this.separatorThin(), this.center('SALIDAS'), this.separatorThin(),
+      ? [this.separatorThin(), this.center('SUELDOS'), this.separatorThin(),
          ...salidas.map((m) => this.alignLeftRight(`  ${m.descripcion ?? 'Sin concepto'}`, `-$${m.monto.toFixed(2)}`)),
-         this.alignLeftRight('  Total salidas', `-$${totalSalidas.toFixed(2)}`)]
-      : [this.alignLeftRight('Salidas', `-$${totalSalidas.toFixed(2)}`)];
+         this.alignLeftRight('  Total sueldos', `-$${totalSalidas.toFixed(2)}`)]
+      : [this.alignLeftRight('Sueldos', `-$${totalSalidas.toFixed(2)}`)];
 
     const gastosLines = gastos.length > 0
       ? [this.separatorThin(), this.center('GASTOS'), this.separatorThin(),

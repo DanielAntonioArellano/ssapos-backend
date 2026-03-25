@@ -96,12 +96,13 @@ export class OrdersService {
     });
   }
 
-  async list(restaurantId: number, from?: string, to?: string, status?: string) {
+  async list(restaurantId: number, from?: string, to?: string, status?: string, type?: string) {
     const where: any = { restaurantId };
     if (from && to) {
       where.createdAt = { gte: new Date(from), lte: new Date(to) };
     }
     if (status) where.status = status;
+    if (type) where.type = type;
     return this.prisma.order.findMany({
       where,
       include: { items: { include: { product: true } } },

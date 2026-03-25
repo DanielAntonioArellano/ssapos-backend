@@ -33,6 +33,7 @@ export class OrdersController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('status') status?: string,
+    @Query('type') type?: string,  
   ) {
     return this.ordersService.list(req.user.restaurantId, from, to, status);
   }

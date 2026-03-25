@@ -27,11 +27,12 @@ export class TicketsService {
   }
 
   private formatDate(date: Date) {
-    return new Date(date).toLocaleString('es-MX', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
-  }
+  return new Date(date).toLocaleString('es-MX', {
+    timeZone: 'America/Mexico_City',  // ← agregar esto
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
 
   // ==================================================
   // TICKET DE VENTA

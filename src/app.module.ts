@@ -34,7 +34,7 @@ import { PrinterStatusController } from './printer/printer-status.controller';
     PrintersModule,
     PrinterModule,
     PrintModule,
-    PrinterStatusController,
   ],
+  controllers: [PrinterStatusController],
 })
 export class AppModule {}

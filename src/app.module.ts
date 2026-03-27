@@ -15,6 +15,7 @@ import { CategoriesModule } from './categories/categories.module';
 import { PrintersModule } from './modules/printers/printers.module';
 import { PrinterModule } from './printer/printer.module';
 import { PrintModule } from './print/print.module';
+import { PrinterStatusController } from './printer/printer-status.controller';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { PrintModule } from './print/print.module';
     PrintersModule,
     PrinterModule,
     PrintModule,
+    PrinterStatusController,
   ],
 })
 export class AppModule {}

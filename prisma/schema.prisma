@@ -49,7 +49,8 @@ model Restaurant {
   phone     String?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
-
+  agentSecret  String?
+  
   folioVenta Int @default(1)
   folioOrden Int @default(1)
   folioCorte Int @default(1)

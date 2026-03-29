@@ -30,11 +30,10 @@ export class CajaService {
     }
   }
 
-  // Include reutilizable para ventas con datos de cliente
   private get ventasInclude() {
     return {
       items: { include: { product: true } },
-      order: {                          // ← relación Sale → Order
+      order: {
         select: {
           clientName: true,
           clientPhone: true,
@@ -178,22 +177,20 @@ export class CajaService {
       );
     }
 
+    // Registrar fondo como GASTO en lugar de SALIDA
     if (fondoFinal && fondoFinal > 0) {
-      await this.prisma.movimiento.create({
+      await this.prisma.gasto.create({
         data: {
-          tipo: 'SALIDA',
+          concepto: 'Fondo para siguiente turno',
           monto: fondoFinal,
-          descripcion: 'Fondo para siguiente turno',
-          userId,
           cajaId: caja.id,
-          restaurantId,
         },
       });
 
-      const movimientosActualizados = await this.prisma.movimiento.findMany({
+      const gastosActualizados = await this.prisma.gasto.findMany({
         where: { cajaId: caja.id },
       });
-      caja.movimientos = movimientosActualizados;
+      caja.gastos = gastosActualizados;
     }
 
     let efectivo = 0;

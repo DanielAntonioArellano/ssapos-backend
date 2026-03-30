@@ -23,8 +23,6 @@ export class TicketsController {
     private readonly printGateway: PrintGateway,
   ) {}
 
-  // ── GET tickets ────────────────────────────────────
-
   @Get('sale/:id')
   getSaleTicket(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
     return this.ticketsService.getSaleTicket(req.user.restaurantId, id);
@@ -44,8 +42,6 @@ export class TicketsController {
   getCorteTicket(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
     return this.ticketsService.getCorteTicket(req.user.restaurantId, id);
   }
-
-  // ── POST print ─────────────────────────────────────
 
   @Post('print/sale/:id')
   async printSale(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
@@ -97,24 +93,45 @@ export class TicketsController {
     return { ok: true, message: `Cuenta ${body.numeroCuenta} enviada a impresora` };
   }
 
-  // ── Helper ─────────────────────────────────────────
-  // Siempre intenta por WebSocket primero.
-  // - Si el agente está conectado: emite y el gateway lo envía (o persiste en BD si falla).
-  // - Si el agente está offline: el gateway persiste en BD directamente.
-  // - Solo usa TCP directo si no hay agente configurado en absoluto.
+  // ── Resumen de período (semanal / mensual) ─────────
+  @Post('print/resumen-periodo')
+  async printResumenPeriodo(
+    @Req() req: any,
+    @Body() body: {
+      restaurantName: string;
+      label: string;
+      desde: string;
+      hasta: string;
+      modo: 'SEMANAL' | 'MENSUAL';
+      totalVentas: number;
+      efectivo: number;
+      tarjeta: number;
+      gastos: number;
+      entradas: number;
+      salidas: number;
+      totalGeneral: number;
+      ordenes: number;
+      avgTicket: number;
+      numCajas: number;
+      topItems: { name: string; qty: number; total: number }[];
+    },
+  ) {
+    const restaurantId = req.user.restaurantId;
+    const lines = this.ticketsService.buildResumenPeriodoLines(body);
+    await this.emitOrFallback(restaurantId, 'CAJA', lines);
+    return { ok: true, message: 'Resumen de período enviado a impresora' };
+  }
 
+  // ── Helper ─────────────────────────────────────────
   private async emitOrFallback(
     restaurantId: number,
     role: 'CAJA' | 'COCINA' | 'BARRA',
     lines: string[],
   ) {
     const printer = await this.printerService.getPrinterByRole(restaurantId, role);
-
     if (!printer) {
       throw new BadRequestException(`No hay impresora configurada para rol ${role}`);
     }
-
-    // Siempre pasa por el gateway — si el agente está offline persiste en BD
     await this.printGateway.emitPrintJob(restaurantId, {
       printerIp: printer.ip,
       printerPort: printer.port,

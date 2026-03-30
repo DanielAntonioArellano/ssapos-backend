@@ -27,12 +27,19 @@ export class TicketsService {
   }
 
   private formatDate(date: Date) {
-  return new Date(date).toLocaleString('es-MX', {
-    timeZone: 'America/Mexico_City',  // ← agregar esto
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
+    return new Date(date).toLocaleString('es-MX', {
+      timeZone: 'America/Mexico_City',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  }
+
+  private formatDateShort(date: Date) {
+    return new Date(date).toLocaleDateString('es-MX', {
+      timeZone: 'America/Mexico_City',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+    });
+  }
 
   // ==================================================
   // TICKET DE VENTA
@@ -144,7 +151,7 @@ export class TicketsService {
   }
 
   // ==================================================
-  // TICKET CUENTA PARCIAL (división de cuenta)
+  // TICKET CUENTA PARCIAL
   // ==================================================
 
   buildCuentaParcialLines(data: {
@@ -181,6 +188,75 @@ export class TicketsService {
       this.alignLeftRight('TOTAL', `$${data.total.toFixed(2)}`),
       this.separator(),
       this.center('*** Gracias por su compra ***'),
+      '\n\n\n',
+    ];
+  }
+
+  // ==================================================
+  // TICKET RESUMEN DE PERÍODO (semanal / mensual)
+  // ==================================================
+
+  buildResumenPeriodoLines(data: {
+    restaurantName: string;
+    label: string;
+    desde: string;
+    hasta: string;
+    modo: 'SEMANAL' | 'MENSUAL';
+    totalVentas: number;
+    efectivo: number;
+    tarjeta: number;
+    gastos: number;
+    entradas: number;
+    salidas: number;
+    totalGeneral: number;
+    ordenes: number;
+    avgTicket: number;
+    numCajas: number;
+    topItems: { name: string; qty: number; total: number }[];
+  }): string[] {
+    const topLines = data.topItems.length > 0
+      ? [
+          this.separatorThin(),
+          this.center('TOP PRODUCTOS'),
+          this.separatorThin(),
+          ...data.topItems.map((item, i) =>
+            this.alignLeftRight(
+              `  ${i + 1}. ${item.name.slice(0, 28)}`,
+              `$${item.total.toFixed(2)}`,
+            ),
+          ),
+        ]
+      : [];
+
+    return [
+      this.separator(),
+      this.center(data.restaurantName.toUpperCase()),
+      this.center(`REPORTE ${data.modo}`),
+      this.separator(),
+      this.center(data.label),
+      this.separatorThin(),
+      `Desde:  ${data.desde}`,
+      `Hasta:  ${data.hasta}`,
+      `Cajas:  ${data.numCajas}`,
+      `Impreso: ${this.formatDate(new Date())}`,
+      this.separatorThin(),
+      this.center('RESUMEN DE VENTAS'),
+      this.separatorThin(),
+      this.alignLeftRight(`Ordenes (${data.ordenes})`, `$${data.totalVentas.toFixed(2)}`),
+      this.alignLeftRight('  Efectivo', `$${data.efectivo.toFixed(2)}`),
+      this.alignLeftRight('  Tarjeta', `$${data.tarjeta.toFixed(2)}`),
+      this.alignLeftRight('Ticket promedio', `$${data.avgTicket.toFixed(2)}`),
+      this.separatorThin(),
+      this.center('MOVIMIENTOS'),
+      this.separatorThin(),
+      this.alignLeftRight('Entradas', `+$${data.entradas.toFixed(2)}`),
+      this.alignLeftRight('Sueldos', `-$${data.salidas.toFixed(2)}`),
+      this.alignLeftRight('Gastos', `-$${data.gastos.toFixed(2)}`),
+      ...topLines,
+      this.separator(),
+      this.alignLeftRight('TOTAL DEL PERÍODO', `$${data.totalGeneral.toFixed(2)}`),
+      this.separator(),
+      this.center('Reporte generado correctamente'),
       '\n\n\n',
     ];
   }

@@ -79,8 +79,6 @@ export class TicketsController {
     return { ok: true, message: 'Corte enviado a impresora' };
   }
 
-  // ── Cuenta parcial (división de cuenta) ────────────
-
   @Post('print/cuenta-parcial')
   async printCuentaParcial(
     @Req() req: any,
@@ -100,24 +98,27 @@ export class TicketsController {
   }
 
   // ── Helper ─────────────────────────────────────────
+  // Siempre intenta por WebSocket primero.
+  // - Si el agente está conectado: emite y el gateway lo envía (o persiste en BD si falla).
+  // - Si el agente está offline: el gateway persiste en BD directamente.
+  // - Solo usa TCP directo si no hay agente configurado en absoluto.
 
   private async emitOrFallback(
     restaurantId: number,
     role: 'CAJA' | 'COCINA' | 'BARRA',
     lines: string[],
   ) {
-    if (this.printGateway.isAgentConnected(restaurantId)) {
-      const printer = await this.printerService.getPrinterByRole(restaurantId, role);
-      if (!printer) throw new BadRequestException(`No hay impresora configurada para rol ${role}`);
+    const printer = await this.printerService.getPrinterByRole(restaurantId, role);
 
-      this.printGateway.emitPrintJob(restaurantId, {
-        printerIp: printer.ip,
-        printerPort: printer.port,
-        lines,
-      });
-      return;
+    if (!printer) {
+      throw new BadRequestException(`No hay impresora configurada para rol ${role}`);
     }
 
-    await this.printerService.printByRole(restaurantId, role, lines);
+    // Siempre pasa por el gateway — si el agente está offline persiste en BD
+    await this.printGateway.emitPrintJob(restaurantId, {
+      printerIp: printer.ip,
+      printerPort: printer.port,
+      lines,
+    });
   }
 }

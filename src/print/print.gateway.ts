@@ -16,14 +16,10 @@ interface PrintJob {
   printerIp: string;
   printerPort: number;
   lines: string[];
-  enqueuedAt: Date;
-  attempts: number;
 }
 
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
+  cors: { origin: '*' },
   namespace: '/print',
 })
 export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -31,12 +27,7 @@ export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
   server: Server;
 
   private readonly logger = new Logger(PrintGateway.name);
-
-  // Mapa: restaurantId → socketId del agente autenticado
   private agents = new Map<number, string>();
-
-  // Cola de trabajos pendientes por restaurante (cuando agente está offline)
-  private pendingJobs = new Map<number, PrintJob[]>();
 
   constructor(private prisma: PrismaService) {}
 
@@ -53,7 +44,6 @@ export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  // El agente se registra con su restaurantId y secret
   @SubscribeMessage('register')
   async handleRegister(
     @MessageBody() data: { restaurantId: number; secret: string },
@@ -67,7 +57,6 @@ export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    // ── Validar secret contra BD ──
     const restaurant = await this.prisma.restaurant.findUnique({
       where: { id: restaurantId },
       select: { agentSecret: true, active: true },
@@ -76,73 +65,81 @@ export class PrintGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!restaurant || !restaurant.active) {
       client.emit('registered', { ok: false, error: 'Restaurante no encontrado o inactivo' });
       client.disconnect();
-      this.logger.warn(`Intento de registro con restaurante inválido: ${restaurantId}`);
       return;
     }
 
     if (restaurant.agentSecret !== secret) {
       client.emit('registered', { ok: false, error: 'Secret inválido' });
       client.disconnect();
-      this.logger.warn(`Secret inválido para restaurante ${restaurantId} desde ${client.handshake.address}`);
       return;
     }
 
-    // Registrar agente
     this.agents.set(restaurantId, client.id);
-    this.logger.log(`Agente autenticado para restaurante ${restaurantId}`);
+    this.logger.log(`Agente registrado para restaurante ${restaurantId}`);
     client.emit('registered', { ok: true, restaurantId });
 
-    // ── Reenviar trabajos pendientes en cola ──
-    const pending = this.pendingJobs.get(restaurantId);
-    if (pending && pending.length > 0) {
-      this.logger.log(`Reenviando ${pending.length} trabajos pendientes a restaurante ${restaurantId}`);
-      for (const job of pending) {
-        this.server.to(client.id).emit('print', {
-          printerIp: job.printerIp,
-          printerPort: job.printerPort,
-          lines: job.lines,
-        });
-      }
-      this.pendingJobs.delete(restaurantId);
-    }
+    // ── Reenviar trabajos pendientes desde la BD ──
+    await this.flushPendingJobs(restaurantId, client.id);
   }
 
-  // Emitir trabajo de impresión — encola si el agente está offline
-  emitPrintJob(
+  // Emitir trabajo — si agente offline, persiste en BD
+  async emitPrintJob(
     restaurantId: number,
-    job: { printerIp: string; printerPort: number; lines: string[] },
-  ): boolean {
+    job: PrintJob,
+  ): Promise<boolean> {
     const socketId = this.agents.get(restaurantId);
 
     if (!socketId) {
-      // Agregar a cola de pendientes
-      const queue = this.pendingJobs.get(restaurantId) ?? [];
-      queue.push({ ...job, enqueuedAt: new Date(), attempts: 0 });
-      this.pendingJobs.set(restaurantId, queue);
+      // Persistir en base de datos
+      await this.prisma.printQueue.create({
+        data: {
+          restaurantId,
+          printerIp: job.printerIp,
+          printerPort: job.printerPort,
+          lines: job.lines,
+        },
+      });
       this.logger.warn(
-        `Agente offline para restaurante ${restaurantId}. Trabajo encolado (${queue.length} pendientes)`,
+        `Agente offline para restaurante ${restaurantId}. Trabajo persistido en BD.`,
       );
       return false;
     }
 
     this.server.to(socketId).emit('print', job);
-    this.logger.log(`Trabajo de impresión enviado a restaurante ${restaurantId}`);
+    this.logger.log(`Trabajo enviado a restaurante ${restaurantId}`);
     return true;
   }
 
-  // Verificar si hay agente conectado
+  // Reenviar todos los trabajos pendientes de la BD al agente
+  private async flushPendingJobs(restaurantId: number, socketId: string) {
+    const pending = await this.prisma.printQueue.findMany({
+      where: { restaurantId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (pending.length === 0) return;
+
+    this.logger.log(
+      `Reenviando ${pending.length} trabajos pendientes a restaurante ${restaurantId}`,
+    );
+
+    for (const job of pending) {
+      this.server.to(socketId).emit('print', {
+        printerIp: job.printerIp,
+        printerPort: job.printerPort,
+        lines: job.lines as string[],
+      });
+
+      // Eliminar de la BD una vez enviado
+      await this.prisma.printQueue.delete({ where: { id: job.id } });
+    }
+  }
+
   isAgentConnected(restaurantId: number): boolean {
     return this.agents.has(restaurantId);
   }
 
-  // Cantidad de trabajos pendientes en cola
-  getPendingJobsCount(restaurantId: number): number {
-    return this.pendingJobs.get(restaurantId)?.length ?? 0;
-  }
-
-  // Limpiar cola manualmente (por si se necesita desde un endpoint)
-  clearPendingJobs(restaurantId: number): void {
-    this.pendingJobs.delete(restaurantId);
-    this.logger.log(`Cola de impresión limpiada para restaurante ${restaurantId}`);
+  async getPendingJobsCount(restaurantId: number): Promise<number> {
+    return this.prisma.printQueue.count({ where: { restaurantId } });
   }
 }

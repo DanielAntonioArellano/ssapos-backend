@@ -11,23 +11,11 @@ export class CajaService {
   constructor(private prisma: PrismaService) {}
 
   private async validarPassword(userId: number, password: string) {
-    if (!password) {
-      throw new ForbiddenException('Se requiere contraseña');
-    }
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new ForbiddenException('Usuario no encontrado');
-    }
-
+    if (!password) throw new ForbiddenException('Se requiere contraseña');
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new ForbiddenException('Usuario no encontrado');
     const match = await bcrypt.compare(password, user.password);
-
-    if (!match) {
-      throw new ForbiddenException('Contraseña incorrecta');
-    }
+    if (!match) throw new ForbiddenException('Contraseña incorrecta');
   }
 
   private get ventasInclude() {
@@ -70,9 +58,7 @@ export class CajaService {
     return this.prisma.caja.findFirst({
       where: { restaurantId, fechaCierre: null },
       include: {
-        ventas: {
-          include: this.ventasInclude,
-        },
+        ventas: { include: this.ventasInclude },
         gastos: true,
         movimientos: true,
         user: true,
@@ -96,10 +82,7 @@ export class CajaService {
     await this.validarPassword(userId, password);
 
     const caja = await this.obtenerCajaActual(restaurantId);
-
-    if (!caja) {
-      throw new BadRequestException('No hay una caja abierta');
-    }
+    if (!caja) throw new BadRequestException('No hay una caja abierta');
 
     return this.prisma.movimiento.create({
       data: {
@@ -128,10 +111,7 @@ export class CajaService {
     await this.validarPassword(userId, password);
 
     const caja = await this.obtenerCajaActual(restaurantId);
-
-    if (!caja) {
-      throw new BadRequestException('No hay caja abierta');
-    }
+    if (!caja) throw new BadRequestException('No hay caja abierta');
 
     return this.prisma.gasto.create({
       data: { cajaId: caja.id, concepto, monto },
@@ -153,16 +133,10 @@ export class CajaService {
 
     const caja = await this.prisma.caja.findFirst({
       where: { restaurantId, fechaCierre: null },
-      include: {
-        ventas: true,
-        gastos: true,
-        movimientos: true,
-      },
+      include: { ventas: true, gastos: true, movimientos: true },
     });
 
-    if (!caja) {
-      throw new BadRequestException('No hay caja abierta');
-    }
+    if (!caja) throw new BadRequestException('No hay caja abierta');
 
     const ordenesPendientes = await this.prisma.order.count({
       where: {
@@ -175,22 +149,6 @@ export class CajaService {
       throw new BadRequestException(
         `Hay ${ordenesPendientes} orden(es) pendientes. Complétalas o cancélalas antes de cerrar.`,
       );
-    }
-
-    // Registrar fondo como GASTO en lugar de SALIDA
-    if (fondoFinal && fondoFinal > 0) {
-      await this.prisma.gasto.create({
-        data: {
-          concepto: 'Fondo para siguiente turno',
-          monto: fondoFinal,
-          cajaId: caja.id,
-        },
-      });
-
-      const gastosActualizados = await this.prisma.gasto.findMany({
-        where: { cajaId: caja.id },
-      });
-      caja.gastos = gastosActualizados;
     }
 
     let efectivo = 0;
@@ -210,7 +168,10 @@ export class CajaService {
       .filter((m) => m.tipo === 'SALIDA')
       .reduce((s, m) => s + m.monto, 0);
 
+    // totalGeneral = dinero real en caja (sin descontar fondo)
     const totalGeneral = caja.montoInicial + efectivo + entradas - gastos - salidas;
+
+    const fondo = fondoFinal && fondoFinal > 0 ? fondoFinal : null;
 
     return this.prisma.caja.update({
       where: { id: caja.id },
@@ -219,6 +180,7 @@ export class CajaService {
         totalEfectivo: efectivo,
         totalTarjeta: tarjeta,
         totalGeneral,
+        fondoFinal: fondo, // ← campo nuevo, no afecta reportes ni gastos
       },
       include: {
         ventas: true,
@@ -232,9 +194,7 @@ export class CajaService {
     return this.prisma.caja.findMany({
       where: { restaurantId },
       include: {
-        ventas: {
-          include: this.ventasInclude,
-        },
+        ventas: { include: this.ventasInclude },
         gastos: true,
         movimientos: true,
         user: true,

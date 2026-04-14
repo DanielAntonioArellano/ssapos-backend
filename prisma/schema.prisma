@@ -219,6 +219,7 @@ model Caja {
   totalEfectivo Float?
   totalTarjeta  Float?
   totalGeneral  Float?
+  fondoFinal    Float?
 
   restaurant  Restaurant   @relation(fields: [restaurantId], references: [id])
   user        User         @relation(fields: [userId], references: [id])

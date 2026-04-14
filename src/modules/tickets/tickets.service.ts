@@ -308,16 +308,20 @@ export class TicketsService {
     const propinasTotal  = caja.ventas.reduce((s, v) => s + ((v as any).tip ?? 0), 0);
     const hayPropinas    = propinasTotal > 0.001;
 
-    const fondo    = caja.movimientos.find((m) => m.tipo === 'SALIDA' && m.descripcion === 'Fondo para siguiente turno');
+    // fondoFinal viene del campo directo de Caja, no de movimientos
+    const totalFondo = (caja as any).fondoFinal ?? 0;
+    const hayFondo   = totalFondo > 0;
+
     const entradas = caja.movimientos.filter((m) => m.tipo === 'ENTRADA');
-    const salidas  = caja.movimientos.filter((m) => m.tipo === 'SALIDA' && m.descripcion !== 'Fondo para siguiente turno');
+    const salidas  = caja.movimientos.filter((m) => m.tipo === 'SALIDA');
     const gastos   = caja.gastos;
 
     const totalEntradas = entradas.reduce((s, m) => s + m.monto, 0);
     const totalSalidas  = salidas.reduce((s, m) => s + m.monto, 0);
     const totalGastos   = gastos.reduce((s, g) => s + g.monto, 0);
-    const totalFondo    = fondo?.monto ?? 0;
-    const totalFinal    = caja.montoInicial + ventasEfectivo + totalEntradas - totalSalidas - totalGastos - totalFondo;
+
+    // totalFinal descuenta el fondo para mostrar lo que se lleva el dueño
+    const totalFinal = caja.montoInicial + ventasEfectivo + totalEntradas - totalSalidas - totalGastos - totalFondo;
 
     const entradasLines = entradas.length > 0
       ? [this.separatorThin(), this.center('ENTRADAS'), this.separatorThin(),
@@ -337,7 +341,7 @@ export class TicketsService {
          this.alignLeftRight('  Total gastos', `-$${totalGastos.toFixed(2)}`)]
       : [this.alignLeftRight('Gastos', `-$${totalGastos.toFixed(2)}`)];
 
-    const fondoLines = fondo
+    const fondoLines = hayFondo
       ? [this.separatorThin(), this.center('FONDO SIGUIENTE TURNO'), this.separatorThin(),
          this.alignLeftRight('  Fondo retirado', `-$${totalFondo.toFixed(2)}`)]
       : [];

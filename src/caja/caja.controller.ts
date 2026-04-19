@@ -10,7 +10,7 @@ import { CajaService } from './caja.service';
 import { AbrirCajaDto } from './dto/abrir-caja.dto';
 import { GastoDto } from './dto/gasto.dto';
 import { MovimientoDto } from './dto/movimiento.dto';
-import { JwtAuthGuard } from '../../src/common/jwt-auth.guard';
+import { JwtAuthGuard } from '../../common/jwt-auth.guard';
 
 @Controller('caja')
 @UseGuards(JwtAuthGuard)
@@ -56,14 +56,20 @@ export class CajaController {
   async cerrar(
     @Req() req,
     @Body('password') password: string,
-    @Body('fondoFinal') fondoFinal?: number,
+    @Body('fondoFinal') fondoFinal?: string | number,
   ) {
+    // Parsear a número explícitamente — el body HTTP puede traerlo como string
+    const fondo =
+      fondoFinal !== undefined && fondoFinal !== null && fondoFinal !== ''
+        ? parseFloat(String(fondoFinal))
+        : undefined;
+
     return this.cajaService.cerrarCaja(
       req.user.restaurantId,
       req.user.role,
       req.user.userId,
       password,
-      fondoFinal,
+      fondo,
     );
   }
 

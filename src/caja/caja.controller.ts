@@ -10,7 +10,7 @@ import { CajaService } from './caja.service';
 import { AbrirCajaDto } from './dto/abrir-caja.dto';
 import { GastoDto } from './dto/gasto.dto';
 import { MovimientoDto } from './dto/movimiento.dto';
-import { JwtAuthGuard } from '../../common/jwt-auth.guard';
+import { JwtAuthGuard } from '../../src/common/jwt-auth.guard';
 
 @Controller('caja')
 @UseGuards(JwtAuthGuard)

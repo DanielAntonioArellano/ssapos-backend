@@ -21,7 +21,6 @@ export class OrdersService {
     if (!match) throw new ForbiddenException('Contraseña incorrecta');
   }
 
-  // Valida que la contraseña corresponda a cualquier admin del restaurante
   private async validarAdmin(restaurantId: number, password: string) {
     if (!password) throw new ForbiddenException('Se requiere contraseña de administrador');
 
@@ -59,6 +58,7 @@ export class OrdersService {
     const itemsData: {
       productId: number | null;
       customName: string | null;
+      notes: string | null;
       quantity: number;
       priceUnit: number;
       subtotal: number;
@@ -70,10 +70,24 @@ export class OrdersService {
           where: { id: i.productId, restaurantId },
         });
         if (!product) throw new NotFoundException(`Producto ${i.productId} no pertenece a este restaurante`);
-        itemsData.push({ productId: i.productId, customName: null, quantity: i.quantity, priceUnit: i.priceUnit, subtotal: i.priceUnit * i.quantity });
+        itemsData.push({
+          productId: i.productId,
+          customName: null,
+          notes: i.notes ?? null,
+          quantity: i.quantity,
+          priceUnit: i.priceUnit,
+          subtotal: i.priceUnit * i.quantity,
+        });
       } else {
         if (!i.customName) throw new BadRequestException('Custom items require customName');
-        itemsData.push({ productId: null, customName: i.customName, quantity: i.quantity, priceUnit: i.priceUnit, subtotal: i.priceUnit * i.quantity });
+        itemsData.push({
+          productId: null,
+          customName: i.customName,
+          notes: i.notes ?? null,
+          quantity: i.quantity,
+          priceUnit: i.priceUnit,
+          subtotal: i.priceUnit * i.quantity,
+        });
       }
     }
 
@@ -130,16 +144,37 @@ export class OrdersService {
     };
 
     if (dto.items) {
-      const itemsData: { productId: number | null; customName: string | null; quantity: number; priceUnit: number; subtotal: number; }[] = [];
+      const itemsData: {
+        productId: number | null;
+        customName: string | null;
+        notes: string | null;
+        quantity: number;
+        priceUnit: number;
+        subtotal: number;
+      }[] = [];
 
       for (const i of dto.items) {
         if (i.productId) {
           const product = await this.prisma.product.findFirst({ where: { id: i.productId, restaurantId } });
           if (!product) throw new NotFoundException(`Producto ${i.productId} no pertenece a este restaurante`);
-          itemsData.push({ productId: i.productId, customName: null, quantity: i.quantity, priceUnit: i.priceUnit, subtotal: i.priceUnit * i.quantity });
+          itemsData.push({
+            productId: i.productId,
+            customName: null,
+            notes: i.notes ?? null,
+            quantity: i.quantity,
+            priceUnit: i.priceUnit,
+            subtotal: i.priceUnit * i.quantity,
+          });
         } else {
           if (!i.customName) throw new BadRequestException('Custom items require customName');
-          itemsData.push({ productId: null, customName: i.customName, quantity: i.quantity, priceUnit: i.priceUnit, subtotal: i.priceUnit * i.quantity });
+          itemsData.push({
+            productId: null,
+            customName: i.customName,
+            notes: i.notes ?? null,
+            quantity: i.quantity,
+            priceUnit: i.priceUnit,
+            subtotal: i.priceUnit * i.quantity,
+          });
         }
       }
 
@@ -247,7 +282,6 @@ export class OrdersService {
     });
   }
 
-  // ── CANCELAR: requiere concepto + contraseña de admin ──
   async cancel(
     restaurantId: number,
     id: number,
@@ -270,7 +304,7 @@ export class OrdersService {
       where: { id },
       data: {
         status: 'CANCELLED',
-        cancelConcepto: concepto.trim(),   // ← campo nuevo en modelo Order
+        cancelConcepto: concepto.trim(),
       },
     });
   }

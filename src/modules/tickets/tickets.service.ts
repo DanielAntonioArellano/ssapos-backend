@@ -119,6 +119,10 @@ export class TicketsService {
       for (const item of order.items) {
         const name = item.product?.name ?? item.customName ?? 'Producto';
         itemLines.push(this.alignLeftRight(`  ${item.quantity}x ${name}`, `$${item.subtotal.toFixed(2)}`));
+        // Notas del producto — solo en ticket de cocina
+        if ((item as any).notes) {
+          itemLines.push(`    >> ${(item as any).notes}`);
+        }
       }
 
       const tipoLabel = order.type === 'DINE_IN'
@@ -308,7 +312,6 @@ export class TicketsService {
     const propinasTotal  = caja.ventas.reduce((s, v) => s + ((v as any).tip ?? 0), 0);
     const hayPropinas    = propinasTotal > 0.001;
 
-    // fondoFinal viene del campo directo de Caja, no de movimientos
     const totalFondo = (caja as any).fondoFinal ?? 0;
     const hayFondo   = totalFondo > 0;
 
@@ -320,7 +323,6 @@ export class TicketsService {
     const totalSalidas  = salidas.reduce((s, m) => s + m.monto, 0);
     const totalGastos   = gastos.reduce((s, g) => s + g.monto, 0);
 
-    // totalFinal descuenta el fondo para mostrar lo que se lleva el dueño
     const totalFinal = caja.montoInicial + ventasEfectivo + totalEntradas - totalSalidas - totalGastos - totalFondo;
 
     const entradasLines = entradas.length > 0

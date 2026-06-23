@@ -36,6 +36,7 @@ export class CreateOrderDto {
   items: {
     productId?: number;
     customName?: string;
+    notes?: string;
     quantity: number;
     priceUnit: number;
   }[];
